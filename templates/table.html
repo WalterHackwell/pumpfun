@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pump.Fun Dashboard</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container-fluid {
+            padding: 20px; /* Added padding for overall page content */
+        }
+        #notification {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #28a745;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1000;
+        }
+        .header-with-image {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px; /* Space between header and table */
+        }
+        .header-with-image img {
+            margin-right: 15px;
+        }
+        .table-responsive {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            table-layout: fixed; /* Ensures table occupies all available space */
+        }
+        table th, table td {
+            text-overflow: ellipsis;
+            overflow: hidden;
+        }
+        .timestamp {
+            min-width: 200px; /* Adjust based on your content */
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid"> <!-- Changed to container-fluid for full width -->
+        <div class="header-with-image">
+            <img src="/static/redpill.png" alt="Red Pill" height="50">
+            <h2>Pump.Fun Dashboard</h2>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-bordered">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Mint</th>
+                        <th>Name</th>
+                        <th>Symbol</th>
+                        <th>Raydium Pool</th>
+                        <th>King of the Hill Timestamp</th>
+                        <th>Reply Count</th>
+                        <th>USD Market Cap</th>
+                    </tr>
+                </thead>
+                <tbody id="coin-table-body">
+                    <!-- Table rows will be dynamically populated here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div id="notification"></div>
+    <script>
+        function convertToDateTime(millis) {
+            if (!millis) return 'N/A';
+            const date = new Date(millis);
+            return date.toLocaleString();
+        }
+        function showNotification(message) {
+            const notification = $('#notification');
+            notification.text(message).fadeIn();
+            setTimeout(() => notification.fadeOut(), 5000);
+        }
+        function fetchData() {
+    $.getJSON('/api/data', function(data) {
+        const sortedData = data.sort((a, b) => {
+            const usdMarketCapA = a.usd_market_cap || 0;
+            const usdMarketCapB = b.usd_market_cap || 0;
+
+            const getColorPriority = (usdMarketCap) => {
+                if (usdMarketCap > 20000) return 3; // Green
+                if (usdMarketCap >= 8000 && usdMarketCap <= 20000) return 2; // Orange
+                return 1; // Red
+            };
+
+            const priorityA = getColorPriority(usdMarketCapA);
+            const priorityB = getColorPriority(usdMarketCapB);
+
+            return priorityB - priorityA || usdMarketCapB - usdMarketCapA;
+        });
+
+        $('#coin-table-body').empty(); // Clear the table body for fresh data
+
+        sortedData.forEach(function(coin) {
+            const usdMarketCap = coin.usd_market_cap || 0;
+            let rowClass = 'table-warning'; // Default to orange
+            if (usdMarketCap > 20000) {
+                rowClass = 'table-success'; // Green for high market cap
+            } else if (usdMarketCap < 8000) {
+                rowClass = 'table-danger'; // Red for low market cap
+            }
+            const ruggedStatus = coin.rugged ? "Yes" : "No";
+
+            const rowHtml = `
+                <tr class="${rowClass}">
+                    <td class="copy-mint">${coin.mint}</td>
+                    <td><a href="http://www.pump.fun/${coin.mint}" target="_blank">${coin.name}</a></td>
+                    <td>${coin.symbol}</td>
+                    <td>${coin.raydium_pool || 'N/A'}</td>
+                    <td class="timestamp">${convertToDateTime(coin.king_of_the_hill_timestamp)}</td>
+                    <td>${coin.reply_count || 0}</td>
+                    <td>${parseFloat(usdMarketCap).toFixed(2)}</td>
+                </tr>
+            `;
+
+            $('#coin-table-body').append(rowHtml);
+        });
+
+        attachCopyMintEvent();
+    });
+}
+
+function attachCopyMintEvent() {
+    // Detach previous click events to prevent multiple bindings
+    $('.copy-mint').off('click').on('click', function() {
+        const mintId = $(this).text();
+        navigator.clipboard.writeText(mintId).then(function() {
+            showNotification('Copied to clipboard: ' + mintId);
+        }, function(err) {
+            console.error('Could not copy text: ', err);
+        });
+    });
+}
+
+$(document).ready(function() {
+    fetchData();
+    setInterval(fetchData, 1000); // Adjust the interval as needed
+});
+    </script>
+</body>
+</html>
